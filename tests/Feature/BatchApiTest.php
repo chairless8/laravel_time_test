@@ -16,6 +16,8 @@ class BatchApiTest extends TestCase
      */
     public function test_successful_batch_creation(): void
     {
+        \Illuminate\Support\Facades\Queue::fake();
+
         $payload = [
             'urls' => [
                 'https://example.com/file1.txt',

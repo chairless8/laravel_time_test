@@ -1,198 +1,59 @@
-# ROADMAP
+# Development Roadmap Summary
 
-## Development Approach
-
-The project will be developed incrementally, prioritizing a working and testable solution at every stage.
-
-Rather than implementing every feature at once, each phase builds upon the previous one while keeping the application functional. This approach simplifies debugging, encourages continuous validation, and allows architectural decisions to evolve naturally.
-
-Automated testing will be introduced progressively as core features are implemented to ensure that the most critical business rules remain stable throughout development.
+This document summarizes the chronological phases and implementation milestones completed during the development of the Batch File Compression Service.
 
 ---
 
-# Phase 0 — Planning
-
-## Goal
-
-Define the project foundation before writing code.
-
-### Deliverables
-
-* Project structure
-* Architecture definition
-* Data model
-* Documentation outline
-* Development roadmap
-* Initial design decisions
-
----
-
-# Phase 1 — Project Setup
-
-## Goal
-
-Create a fully reproducible development environment.
-
-### Deliverables
-
-* Laravel project
-* Docker environment
-* Database configuration
-* Queue configuration
-* Storage configuration
-* Local development environment
-
-At the end of this phase the application should be running successfully inside Docker.
-
----
-
-# Phase 2 — Domain Model
-
-## Goal
-
-Implement the application's core domain.
-
-### Deliverables
-
-* Database migrations
-* Eloquent models
-* Entity relationships
-* Status enumerations
-* Basic persistence
-
-The system should already be capable of storing batches and files.
-
----
-
-# Phase 3 — API Foundation
-
-## Goal
-
-Expose the initial REST API.
-
-### Deliverables
-
-* Request validation
-* API endpoints
-* Resource responses
-* Error handling
-* Initial automated tests
-
-At the end of this phase the API should accept valid requests and persist batch information.
-
----
-
-# Phase 4 — Background Processing
-
-## Goal
-
-Implement asynchronous processing.
-
-### Deliverables
-
-* Queue jobs
-* Worker implementation
-* Batch processing
-* Status updates
-* Progress tracking
-
-The API should immediately return after dispatching work.
-
----
-
-# Phase 5 — File Processing
-
-## Goal
-
-Implement the complete processing pipeline.
-
-### Deliverables
-
-* File download
-* File validation
-* Compression
-* Local storage
-* Metadata persistence
-* Download endpoints
-
-Each file should be processed independently.
-
----
-
-# Phase 6 — Reliability
-
-## Goal
-
-Improve robustness and operational behavior.
-
-### Deliverables
-
-* Concurrency control
-* Job idempotency
-* Processing locks
-* Failure recovery
-* Additional validation
-
-This phase focuses on preventing duplicate processing and ensuring consistent state transitions.
-
----
-
-# Phase 7 — Finalization
-
-## Goal
-
-Prepare the project for technical review.
-
-### Deliverables
-
-* Documentation review
-* Automated test review
-* Code cleanup
-* Final project verification
-* Docker validation
-
-The project should be reproducible, documented, and ready for evaluation.
-
----
-
-# Testing Strategy
-
-Automated tests will be developed alongside the implementation instead of being postponed until the end of the project.
-
-Testing will focus on the application's critical behavior, including:
-
-* Request validation
-* API responses
-* Persistence
-* Background job execution
-* Status transitions
-* Error handling
-
-The objective is to validate the core business workflow rather than pursuing exhaustive test coverage.
-
----
-
-# Development Principles
-
-Throughout the implementation the following principles will guide development:
-
-* Keep the solution simple and maintainable.
-* Prioritize correctness over feature completeness.
-* Make architectural decisions explicit.
-* Build incrementally.
-* Document trade-offs.
-* Deliver a working solution at every stage.
-
----
-
-# Success Criteria
-
-The implementation will be considered complete when:
-
-* The API accepts and validates compression batches.
-* Processing is executed asynchronously.
-* Batch and file status can be queried at any time.
-* Errors are isolated per file.
-* Compressed files are available for download.
-* The project runs entirely through Docker.
-* Documentation clearly explains the implementation and design decisions.
+## Completed Phases & Deliverables
+
+### Phase 0 — Project Bootstrap
+*Set up the initial system configuration and reproducible environment.*
+- **Deliverables**:
+  - Laravel 12 application scaffold inside Docker.
+  - Setup database connection configurations (MySQL 8.0) and queue tables.
+  - Created environment variables template `.env.example`.
+  - Configured phpunit.xml for in-memory SQLite feature and unit testing.
+
+### Phase 1 — Domain Model
+*Established database schema, Eloquent entities, relationships, and backing enumerations.*
+- **Deliverables**:
+  - Created `Batch`, `BatchFile`, and `File` Eloquent models.
+  - Setup model attributes, casting, timestamps, and relationship mapping.
+  - Written and ran migrations setting up `batches`, `batch_files`, and `files` tables.
+  - Introduced backing enums: `BatchStatus` and `FileStatus`.
+
+### Phase 2 — API Foundation
+*Developed input validations, REST controllers, API resources, and feature tests.*
+- **Deliverables**:
+  - Created `StoreBatchRequest` validating lists of 1 to 5 HTTPS URLs.
+  - Created API resource classes to control serialized response formats.
+  - Implemented `BatchController` endpoints: create batch, list batches, retrieve batch by UUID.
+  - Decoupled API controllers from models via `CreateBatchService`.
+  - Added initial feature tests asserting payload validations and database persistence.
+
+### Phase 3A — Architecture Refinement & Queue Integration
+*Renamed database items, set up contract abstractions, and enabled background processing.*
+- **Deliverables**:
+  - Renamed Docker containers, images, and mysql databases to match the `compression-service` domain.
+  - Extracted service contracts: `CreateBatchServiceInterface` bound to `CreateBatchService` in the service container.
+  - Implemented `ProcessBatchJob` to run background processing asynchronously using the Laravel database queue driver.
+  - Dispatched lightweight domain events (`BatchCreated`, `BatchProcessingStarted`, `BatchCompleted`) across execution loops.
+
+### Phase 3B — Real File Processing
+*Replaced simulation work with actual download, validation, compression, and storage logic.*
+- **Deliverables**:
+  - Refined architecture: created specific helper services (`DownloadFileService`, `CompressFileService`, `StoreCompressedFileService`) decoupled from the orchestrator service (`ProcessBatchService`).
+  - Implemented URL stream download using Laravel HTTP client.
+  - Added size validations (max 20MB limit) and MIME validation (`text/plain`, `text/csv`, `application/pdf`).
+  - Added zip generation using native PHP `ZipArchive`.
+  - Setup storage file linking, SHA-256 original file checksum persistence, and status trackers.
+  - Expanded `FileStatus` enum to include `Downloaded` and `Stored` states.
+
+### Phase 4 — Reliability & Concurrency Control
+*Implemented atomic locks, idempotency checks, and orchestrator failover recoverability.*
+- **Deliverables**:
+  - Integrated cache locks (`Cache::lock`) to prevent concurrent workers from running the same batch.
+  - Implemented batch-level and file-level idempotency checks to skip completed elements on retries.
+  - Enforced structured operational logging inside `ProcessBatchService`.
+  - Added recovery logic to set clean DB states if an unexpected orchestrator exception occurs.
+  - Created test suite asserting lock contention, missing batches, partial retry skips, and orchestrator failures.

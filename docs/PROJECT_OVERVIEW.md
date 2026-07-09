@@ -2,98 +2,64 @@
 
 ## Objective
 
-The goal of this project is to build a REST API capable of receiving a batch of file URLs, processing them asynchronously, compressing each downloaded file, and exposing the processing status through dedicated endpoints.
+The goal of this project is to build a REST API capable of receiving a batch of file URLs, validating them, downloading and compressing each file asynchronously, and exposing their status and progress through API endpoints.
 
-The assignment focuses on demonstrating software engineering practices rather than implementing every possible feature. Therefore, priority is given to simplicity, maintainability and clear design decisions.
+This project focuses on showcasing software engineering practices, clean architecture, single-responsibility services, and operational robustness (idempotency, lock-based concurrency control, failover safety) within the scope of a technical interview backend assignment.
 
 ---
 
-# Project Scope
+## Project Scope
 
 The application supports:
 
-- Creating compression batches.
-- Processing between 1 and 5 URLs per batch.
-- Asynchronous processing using Laravel Queues.
-- Individual status tracking for every file.
-- Batch progress tracking.
-- Local storage for compressed files.
-- Metadata persistence.
-- Error reporting.
+- **Creating Compression Batches**: Submitting 1 to 5 HTTPS file URLs per batch via POST request.
+- **Asynchronous Processing**: Immediate job dispatch to database-driven queue workers to process files in the background.
+- **Service-Oriented Processing**: A modular download, validation, compression, and storage pipeline.
+- **Individual Status Tracking**: Explicit state transition modeling for each batch file.
+- **Error Isolation**: Failure to download or validate a single URL does not impact the remaining items in a batch.
+- **Batch Progress Monitoring**: Real-time progress updates calculated and tracked inside the batch record.
+- **Resilient Operations**: Duplicate execution prevention via cache-based concurrency locks and idempotent skips.
+- **Local Storage Storage**: Persisting generated ZIP archives inside the application's local filesystem.
 
 ---
 
-# Design Principles
+## Design Principles
 
-This implementation follows several principles:
+This implementation follows several core software development principles:
 
-- Keep responsibilities clearly separated.
-- Prefer readability over unnecessary complexity.
-- Make background jobs idempotent whenever possible.
-- Design for future extensibility.
-- Deliver a complete and functional solution within the given time constraints.
-
----
-
-# Assumptions
-
-To keep the project focused, several assumptions were made.
-
-- HTTPS URLs are preferred.
-- Files are downloaded into local storage.
-- The service is intended for relatively small files.
-- Compression is performed locally.
-- The system is designed for a single application instance.
-
-These assumptions are documented intentionally and can be revisited for a production implementation.
+- **Single Responsibility**: Every layer and service owns a single job (HTTP routing, validation, download helper, zipping, database persistence).
+- **Graceful Error Isolation**: Errors (HTTP timeouts, non-200 responses, unsupported MIME types, size failures) are caught individually and recorded as distinct `error_message` fields inside the `BatchFile` record.
+- **Idempotency**: Running the same job multiple times or retrying a failed/partial batch will skip files that are already completed, avoiding duplicate work.
+- **Service Container Binding**: Services are decoupled via contracts/interfaces (`CreateBatchServiceInterface`, `ProcessBatchServiceInterface`) registered in the Laravel Service Container.
 
 ---
 
-# Out of Scope
+## Assumptions
 
-The following features are intentionally excluded from this implementation:
-
-- Authentication / Authorization
-- Distributed storage (Amazon S3, Azure Blob, etc.)
-- CDN integration
-- Virus scanning
-- File deduplication
-- Resume interrupted downloads
-- Distributed queue infrastructure
-- Multi-region deployments
-
-These decisions were made to keep the implementation aligned with the assignment scope while leaving room for future improvements.
+- **Secure Connections**: The API enforces HTTPS URL validation for all submitted file URLs.
+- **MIME Validations**: The system supports plain text (`text/plain`), CSV (`text/csv`), and PDF (`application/pdf`) files. Other formats are rejected.
+- **Size Limits**: The maximum download size for a single file is limited to 20 MB.
+- **No User Management**: The service operates as a public utility (no authentication required) for the purposes of the assignment.
+- **Single-Host Local Storage**: Files are saved to local disks, matching the single-host Docker Compose configuration.
 
 ---
 
-# Development Strategy
+## Out of Scope
 
-The project is developed incrementally.
+The following features were intentionally excluded to maintain a simple, maintainable project structure matching the assignment's technical guidelines:
 
-Each implementation phase produces a working version of the application.
-
-The implementation order is:
-
-1. Project setup
-2. Data model
-3. Request validation
-4. REST API
-5. Queue integration
-6. Background processing
-7. File storage
-8. Concurrency control
-9. Testing
-10. Documentation
+- Authentication or API key validation.
+- Distributed object storage (e.g. Amazon S3, MinIO).
+- CDN/Edge distribution.
+- Virus scanning or media processing.
+- Distributed queue scaling dashboards (e.g., Laravel Horizon).
+- Resume interrupted downloads (resumable range requests).
 
 ---
 
-# Success Criteria
+## Technical Success Criteria
 
-The project is considered complete when it satisfies the following goals:
-
-- Requests return immediately after creating a batch.
-- Background jobs process each file independently.
-- Clients can monitor processing progress.
-- Failed files do not prevent successful files from completing.
-- The project is fully reproducible using Docker.
-- Technical decisions are documented and easy to explain during code review.
+- **High Responsiveness**: Endpoint requests return immediately (HTTP 202 Accepted) after persisting the batch, deferring all heavy CPU/IO processing to background queue workers.
+- **Deterministic Workflows**: Multi-worker environments do not trigger race conditions or duplicate downloads thanks to atomic batch locks.
+- **Isolated Failure Paths**: A batch containing a mix of valid URLs, invalid mime-types, and connection timeouts will progress to `partially_completed`, preserving the zips for the successful files and documenting the failure causes for the bad files.
+- **100% Docker Portability**: The service builds, seeds, runs, queues, and tests inside Docker using simple Docker Compose commands.

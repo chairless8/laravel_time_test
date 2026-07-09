@@ -1,18 +1,18 @@
 services:
-  app:
+  compression-app:
     build:
       context: .
       dockerfile: Dockerfile
-    image: laravel_time_test-app
+    image: compression-service-app
     restart: unless-stopped
     working_dir: /var/www/html
     volumes:
       - .:/var/www/html
     depends_on:
-      db:
+      compression-db:
         condition: service_healthy
 
-  web:
+  compression-web:
     image: nginx:alpine
     restart: unless-stopped
     ports:
@@ -21,15 +21,15 @@ services:
       - .:/var/www/html
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
     depends_on:
-      - app
+      - compression-app
 
-  db:
+  compression-db:
     image: mysql:8.0
     restart: unless-stopped
     ports:
       - "33066:3306"
     environment:
-      MYSQL_DATABASE: laravel_time_test
+      MYSQL_DATABASE: compression_service
       MYSQL_USER: laravel_user
       MYSQL_PASSWORD: laravel_password
       MYSQL_ROOT_PASSWORD: root_password
@@ -41,20 +41,20 @@ services:
       timeout: 5s
       retries: 5
 
-  queue:
+  compression-queue:
     build:
       context: .
       dockerfile: Dockerfile
-    image: laravel_time_test-app
+    image: compression-service-app
     restart: unless-stopped
     command: php artisan queue:work --verbose --tries=3 --timeout=90
     working_dir: /var/www/html
     volumes:
       - .:/var/www/html
     depends_on:
-      db:
+      compression-db:
         condition: service_healthy
-      app:
+      compression-app:
         condition: service_started
 
 volumes:

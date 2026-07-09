@@ -1,354 +1,147 @@
-# ARCHITECTURE
+# System Architecture
 
-## System Architecture
-
-The application follows a layered architecture that separates HTTP request handling, business logic, persistence and background processing.
-
-```
-                    Client
-                       │
-                REST API Request
-                       │
-                Laravel Controllers
-                       │
-              Request Validation
-                       │
-                Application Services
-                       │
-          Persist Batch Information
-                       │
-              Dispatch Queue Job
-                       │
-               HTTP 202 Accepted
-                       │
-                -------------------
-                       │
-                  Queue System
-                       │
-               ProcessBatch Job
-                       │
-               Download File(s)
-                       │
-                Compress File(s)
-                       │
-               Store Compressed File
-                       │
-            Update Batch/File Status
-                       │
-                 Query Batch Status
-```
+This document describes the architectural design, processing flows, data models, concurrency control strategies, and error handling behaviors implemented in the Batch File Compression Service.
 
 ---
 
-# Architecture Overview
+## Architecture Design
 
-The system is divided into four logical layers.
-
-## API Layer
-
-Responsible for:
-
-* Receiving client requests.
-* Validating incoming data.
-* Creating batches.
-* Returning HTTP responses.
-* Dispatching background jobs.
-
-This layer performs no heavy processing.
-
----
-
-## Queue Layer
-
-Responsible for scheduling asynchronous work.
-
-The API dispatches a single job containing only the Batch identifier.
-
-Example payload:
-
-```json
-{
-    "batch_id": 15
-}
-```
-
-Only the Batch ID is sent to the queue because the database is considered the single source of truth.
-
-Keeping queue payloads small improves reliability and simplifies retries.
-
----
-
-## Worker Layer
-
-The worker performs all expensive operations.
-
-Responsibilities:
-
-* Retrieve the Batch from the database.
-* Acquire processing lock.
-* Download every file.
-* Validate downloaded content.
-* Compress the file.
-* Store the compressed result.
-* Persist metadata.
-* Update file status.
-* Update batch progress.
-* Release processing lock.
-
-The worker is completely independent from the API process.
-
----
-
-## Persistence Layer
-
-The database stores all information required to recover processing state.
-
-Three primary entities are used.
-
-### Batch
-
-Represents a client request.
-
-Stores:
-
-* Batch identifier
-* Overall status
-* Progress
-* Creation timestamps
-
-Relationship:
+The application follows a Service-Oriented Architecture (SOA) that separates HTTP request handling, background job dispatching, orchestration, and specific task execution.
 
 ```
-Batch
-  |
-  | 1
-  |
-  | *
-BatchFile
+                    Client Request
+                          │
+                   POST /api/batches
+                          │
+              [ Laravel BatchController ]
+                          │
+            Validate URL list payload (1-5 URLs)
+                          │
+         [ CreateBatchServiceInterface ]
+                          │
+              [ CreateBatchService ]
+                          │
+           1. Write Batch/BatchFiles to DB
+           2. Dispatch ProcessBatchJob
+           3. Fire BatchCreated Domain Event
+                          │
+                   HTTP 202 Accepted
+                          │
+               =======================
+                 Queue (Database)
+               =======================
+                          │
+                  [ ProcessBatchJob ]
+                          │
+         [ ProcessBatchServiceInterface ]
+                          │
+              [ ProcessBatchService ]
+                          │
+             Acquire Atomic Cache Lock
+                          │
+                  Loop through files
+                 (Idempotent check)
+                /         |         \
+               /          |          \
+ [DownloadService] [CompressService] [StoreService]
+  Download URL     Zip Archive       Save to Disk
+  to temp file     generation        & link to DB
+               \          |          /
+                \         |         /
+                 Update File Progress
+                          │
+              Finalize Batch Status
+           (Completed/Partial/Failed)
+                          │
+             Release Atomic Cache Lock
+                          │
+             Fire BatchCompleted Event
 ```
 
 ---
 
-### BatchFile
+## Architectural Layers
 
-Represents a single submitted URL.
+### 1. API Layer
+- **Form Request**: `StoreBatchRequest` validates that the payload has a list of `urls`, containing between 1 and 5 elements, all being valid HTTPS URLs.
+- **Controller**: `BatchController` handles endpoints (`POST /api/batches`, `GET /api/batches`, `GET /api/batches/{uuid}`) and injects service contracts.
+- **Service Contract**: `CreateBatchServiceInterface` binds to `CreateBatchService` in the service container.
+- **Responsibility**: Validate input, write initial records, dispatch the queue job, and immediately return a 202 response.
 
-Stores:
+### 2. Queue Orchestration Layer
+- **Job**: `ProcessBatchJob` is a thin worker wrapper that accepts the Batch ID in its constructor.
+- **Resolving Contracts**: In its `handle()` method, it resolves `ProcessBatchServiceInterface` from Laravel's container and calls it.
+- **Queue Payload**: Contains only the Batch ID, keeping the queue lightweight and database-synchronized.
 
-* Original URL
-* Processing status
-* Error messages
-* Reference to generated file
-
-Relationship:
-
-```
-BatchFile
-    |
-    | *
-    |
-    | 1
-   File
-```
+### 3. Service Layer (Business Logic)
+The queue job delegates execution to `ProcessBatchService`, which acts as an orchestrator and delegates tasks to specific helper services:
+- **`DownloadFileService`**: Streams the remote file to a local temporary file using Laravel HTTP Client. Enforces request timeouts.
+- **`CompressFileService`**: Compresses the downloaded file into a ZIP archive using PHP's native `ZipArchive` in a temporary path.
+- **`StoreCompressedFileService`**: Copies the ZIP stream to local storage (`Storage::disk('local')`), creates the `File` metadata record, and associates it with the `BatchFile` record.
+- **`ProcessBatchService` (Orchestrator)**: Manages lock acquisition, idempotency checks, loops through files, validates size/MIME type after download, calculates batch progress percentages, captures failures, unlinks temp files, updates status fields, and dispatches domain events.
 
 ---
 
-### File
+## Domain Events
 
-Represents a compressed file stored by the system.
-
-Stores:
-
-* Original filename
-* Compressed filename
-* MIME type
-* Original size
-* Compressed size
-* Storage path
-
-Although this entity could have been merged into BatchFile, it was intentionally separated to keep responsibilities isolated and allow future features such as:
-
-* File deduplication
-* Reusable compressed files
-* Storage migrations
-* Metadata expansion
+The system communicates lifecycle state transitions using lightweight domain events:
+- **`BatchCreated`**: Fired in `CreateBatchService` after the database records are written and the job is queued.
+- **`BatchProcessingStarted`**: Fired in `ProcessBatchService` when a worker starts executing a batch.
+- **`BatchCompleted`**: Fired in `ProcessBatchService` once all files are processed and the final batch status is resolved.
 
 ---
 
-# Processing Flow
+## State Transition Models
 
-The complete lifecycle is:
-
-1. Client submits a batch.
-2. Request validation succeeds.
-3. Batch is stored.
-4. BatchFiles are stored.
-5. Job is dispatched.
-6. API returns HTTP 202 Accepted.
-7. Worker starts processing.
-8. Each file is processed independently.
-9. Batch progress is updated.
-10. Batch status becomes Completed, Failed or Partially Completed.
-
----
-
-# Batch Status Lifecycle
-
-Possible batch states:
-
+### Batch Lifecycle
+A batch transitions through the following statuses (`App\Enums\BatchStatus`):
 ```
-Pending
-
-↓
-
-Processing
-
-↓
-
-Completed
-Failed
-Partially Completed
+Pending ──► Processing ──► Completed (All files processed successfully)
+                      ├──► PartiallyCompleted (Some files succeeded, some failed)
+                      └──► Failed (All files failed or fatal orchestrator error)
 ```
 
----
-
-# File Status Lifecycle
-
-Each file maintains its own state.
-
+### BatchFile Lifecycle
+Each file transitions through a granular state machine (`App\Enums\FileStatus`):
 ```
-Pending
-
-↓
-
-Downloading
-
-↓
-
-Compressing
-
-↓
-
-Completed
+Pending ──► Downloading ──► Downloaded ──► Compressing ──► Stored ──► Completed
+   │            │              │             │              │
+   └────────────┴──────────────┴─────────────┴──────────────┴───► Failed
 ```
-
-Failure path:
-
-```
-Pending
-
-↓
-
-Downloading
-
-↓
-
-Failed
-```
-
-or
-
-```
-Compressing
-
-↓
-
-Failed
-```
-
-This allows partial success inside a batch.
+*Failure during download, validation, compression, or storage transitions the status directly to `Failed`, logging the error trace inside `error_message`.*
 
 ---
 
-# Concurrency Strategy
+## Concurrency & Idempotency Strategy
 
-Background jobs must be idempotent.
+### Cache-Based Locking
+To prevent multiple background workers from processing the same batch concurrently:
+- `ProcessBatchService` requests a cache lock named `batch_processing_lock_{batchId}`.
+- If the lock is already held, the service logs the event and exits successfully (preventing job failure and constant queue retries).
+- The lock has a TTL (default 300 seconds) which automatically releases the lock if a queue worker crashes or is terminated mid-execution.
 
-Before processing begins, the worker attempts to acquire a lock using the Batch identifier.
-
-Only one worker may process the same batch simultaneously.
-
-If another worker receives the same Batch ID:
-
-* It detects the lock.
-* Processing is skipped.
-* The duplicated job exits safely.
-
-This prevents duplicate downloads and inconsistent status updates.
-
-Different batches can still be processed concurrently by multiple workers.
+### Idempotency Skip Checks
+- **Batch Level**: If a job starts and the batch status is already `Completed`, `PartiallyCompleted`, or `Failed`, the service exits immediately.
+- **File Level**: If a batch execution was interrupted and retried, any `BatchFile` that was already completed (`status === FileStatus::Completed`) is skipped. Only files still in `Pending` or `Failed` status are reprocessed.
 
 ---
 
-# Rate Control
+## Error Handling & Isolation
 
-Concurrency is intentionally limited by the number of active queue workers.
-
-Each worker processes one job at a time.
-
-Increasing throughput only requires increasing the number of workers.
-
-This approach keeps the implementation simple while remaining horizontally scalable.
+- **File-Level Isolation**: A `try...catch` wrapper inside the `BatchFile` processing loop ensures that any failure (HTTP timeout, unsupported MIME type, size limit exceed, ZIP compression error) is logged on the specific record without halting the download of remaining files.
+- **Orchestrator-Level Recovery**: If a fatal error occurs outside the file loop (e.g. database disconnect, code crash):
+  - The `Batch` status is updated to `Failed`.
+  - All non-completed `BatchFile` records are marked as `Failed` with the description of the crash.
+  - The cache lock is released in a master `finally` block.
 
 ---
 
-# Error Handling Strategy
+## Storage Strategy
 
-Errors are isolated per file.
-
-Possible failures include:
-
-* Invalid URL
-* Download timeout
-* Unsupported file type
-* Maximum file size exceeded
-* Compression failure
-
-A single failed file never causes the remaining files in the same batch to stop processing.
-
----
-
-# Storage Strategy
-
-Compressed files are stored locally using Laravel Storage.
-
-Reasons:
-
-* Simple deployment.
-* No external dependencies.
-* Easy Docker integration.
-* Suitable for the assignment scope.
-
-A production implementation would likely replace local storage with an object storage solution such as Amazon S3.
-
----
-
-# Design Decisions
-
-The following decisions were intentionally made:
-
-* Laravel Queue for asynchronous processing.
-* MySQL for persistence.
-* Local storage for compressed files.
-* Queue payload contains only the Batch ID.
-* Separate File entity for future extensibility.
-* Independent status tracking for each file.
-* Background jobs designed to be idempotent.
-
----
-
-# Future Improvements
-
-Given additional development time, the following enhancements would be considered:
-
-* Redis + Horizon
-* Amazon S3
-* Distributed workers
-* Retry policies
-* File deduplication
-* Content hashing
-* Authentication
-* Metrics and monitoring
-* Distributed locking
-* Horizontal scaling
-* Event-driven notifications
+- **Local Storage**: Files are saved to local disks using Laravel's file abstraction `Storage::disk('local')`. Path is `compressions/{original_name}_{uniqid}.zip`.
+- **Database Metadata**: We track details in the `files` table:
+  - `original_filename` & `compressed_filename`
+  - `mime_type` (e.g. `text/plain`, `text/csv`, `application/pdf`)
+  - `original_size` & `compressed_size` (bytes)
+  - `storage_path` & `checksum` (SHA-256 hash of the original file content).
+- **Separation of Concerns**: Storing files in a distinct `files` table linked via foreign key to `batch_files` isolates file storage metadata from queue tracking.

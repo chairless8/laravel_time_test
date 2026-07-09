@@ -6,7 +6,7 @@ use App\Http\Requests\StoreBatchRequest;
 use App\Http\Resources\BatchCollection;
 use App\Http\Resources\BatchResource;
 use App\Models\Batch;
-use App\Services\CreateBatchService;
+use App\Contracts\CreateBatchServiceInterface;
 
 class BatchController extends Controller
 {
@@ -22,7 +22,7 @@ class BatchController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreBatchRequest $request, CreateBatchService $service): \Illuminate\Http\JsonResponse
+    public function store(StoreBatchRequest $request, CreateBatchServiceInterface $service): \Illuminate\Http\JsonResponse
     {
         $batch = $service->execute($request->validated('urls'));
         

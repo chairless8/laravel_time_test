@@ -1,0 +1,184 @@
+# API Documentation
+
+The Batch File Compression Service exposes a REST API for submitting, listing, and retrieving batch compression operations.
+
+All API endpoints are prefixed with `/api`.
+
+---
+
+## Endpoints Summary
+
+| Method | Route | Description |
+| :--- | :--- | :--- |
+| **POST** | `/api/batches` | Create a new file compression batch and queue it for processing. |
+| **GET** | `/api/batches` | Retrieve a paginated list of all compression batches. |
+| **GET** | `/api/batches/{uuid}` | Retrieve detailed status and progress of a specific batch by UUID. |
+
+---
+
+## Endpoints Detail
+
+### 1. Create Batch
+
+Creates a new compression batch and queues background processing for the provided URLs.
+
+- **URL**: `/api/batches`
+- **Method**: `POST`
+- **Headers**:
+  - `Content-Type: application/json`
+  - `Accept: application/json`
+
+#### Request Payload
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `urls` | `array` | Yes | List of 1 to 5 file URLs. URLs must use the HTTPS scheme. |
+
+#### Example Request Body
+```json
+{
+  "urls": [
+    "https://raw.githubusercontent.com/laravel/laravel/11.x/README.md",
+    "https://example.com/sample-document.pdf"
+  ]
+}
+```
+
+#### Responses
+
+##### HTTP 202 Accepted (Success)
+The batch was validated and queued for background processing.
+```json
+{
+  "id": "e454b5df-1e80-4df2-ac24-ca84742cb5f6",
+  "status": "pending",
+  "progress": 0,
+  "created_at": "2026-07-09T18:00:00Z",
+  "finished_at": null,
+  "files": [
+    {
+      "id": 1,
+      "original_url": "https://raw.githubusercontent.com/laravel/laravel/11.x/README.md",
+      "status": "pending",
+      "error_message": null,
+      "started_at": null,
+      "finished_at": null,
+      "file": null
+    },
+    {
+      "id": 2,
+      "original_url": "https://example.com/sample-document.pdf",
+      "status": "pending",
+      "error_message": null,
+      "started_at": null,
+      "finished_at": null,
+      "file": null
+    }
+  ]
+}
+```
+
+##### HTTP 422 Unprocessable Entity (Validation Error)
+Returned when payload constraints are violated (e.g. non-HTTPS, empty, or >5 URLs).
+```json
+{
+  "message": "The urls field must have between 1 and 5 items.",
+  "errors": {
+    "urls": [
+      "The urls field must have between 1 and 5 items."
+    ]
+  }
+}
+```
+
+---
+
+### 2. List Batches
+
+Retrieves a paginated list of all batches in the system (sorted newest first).
+
+- **URL**: `/api/batches`
+- **Method**: `GET`
+- **Headers**:
+  - `Accept: application/json`
+
+#### Response (HTTP 200 OK)
+```json
+{
+  "data": [
+    {
+      "id": "e454b5df-1e80-4df2-ac24-ca84742cb5f6",
+      "status": "completed",
+      "progress": 100,
+      "created_at": "2026-07-09T18:00:00Z",
+      "finished_at": "2026-07-09T18:00:05Z"
+    }
+  ],
+  "links": {
+    "first": "http://localhost:8000/api/batches?page=1",
+    "last": "http://localhost:8000/api/batches?page=1",
+    "prev": null,
+    "next": null
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 1,
+    "path": "http://localhost:8000/api/batches",
+    "per_page": 15,
+    "to": 1,
+    "total": 1
+  }
+}
+```
+
+---
+
+### 3. Retrieve Batch Details
+
+Gets the current progress, status, and processing logs for a specific batch by UUID.
+
+- **URL**: `/api/batches/{uuid}`
+- **Method**: `GET`
+- **Headers**:
+  - `Accept: application/json`
+
+#### Responses
+
+##### HTTP 200 OK (Success)
+```json
+{
+  "id": "e454b5df-1e80-4df2-ac24-ca84742cb5f6",
+  "status": "completed",
+  "progress": 100,
+  "created_at": "2026-07-09T18:00:00Z",
+  "finished_at": "2026-07-09T18:00:05Z",
+  "files": [
+    {
+      "id": 1,
+      "original_url": "https://raw.githubusercontent.com/laravel/laravel/11.x/README.md",
+      "status": "completed",
+      "error_message": null,
+      "started_at": "2026-07-09T18:00:02Z",
+      "finished_at": "2026-07-09T18:00:04Z",
+      "file": {
+        "original_filename": "README.md",
+        "compressed_filename": "README_6689dca3f231e.zip",
+        "mime_type": "text/plain",
+        "original_size": 1480,
+        "compressed_size": 750,
+        "storage_path": "compressions/README_6689dca3f231e.zip",
+        "checksum": "8f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86",
+        "download_url": "http://localhost:8000/storage/compressions/README_6689dca3f231e.zip"
+      }
+    }
+  ]
+}
+```
+
+##### HTTP 404 Not Found
+Returned when the requested UUID does not exist.
+```json
+{
+  "message": "Record not found."
+}
+```
