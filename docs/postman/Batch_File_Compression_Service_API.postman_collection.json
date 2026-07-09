@@ -1,0 +1,319 @@
+{
+	"info": {
+		"_postman_id": "7f81a704-586b-4e1b-b788-b4b10543e49e",
+		"name": "Batch File Compression Service API",
+		"description": "This collection demonstrates the complete asynchronous workflow of the Batch File Compression Service, including batch creation, status tracking, and retrieval of processed files. It is preconfigured with public sample files and automatically stores the generated Batch UUID for subsequent requests.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Happy Path",
+			"item": [
+				{
+					"name": "Create Batch",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const responseData = pm.response.json();",
+									"if (responseData && responseData.data && responseData.data.uuid) {",
+									"    pm.collectionVariables.set(\"batch_uuid\", responseData.data.uuid);",
+									"    console.log(\"Stored batch_uuid: \" + responseData.data.uuid);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"urls\": [\n        \"https://raw.githubusercontent.com/laravel/laravel/12.x/README.md\",\n        \"https://raw.githubusercontent.com/vmg/redcarpet/master/README.md\",\n        \"https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf\"\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/batches",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches"
+							]
+						},
+						"description": "Submit a new batch of public, stable HTTPS URLs to be compressed. The UUID of the created batch is automatically captured from response.data.uuid and stored in the collection variable {{batch_uuid}}."
+					},
+					"response": []
+				},
+				{
+					"name": "List Batches",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/batches",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches"
+							]
+						},
+						"description": "Retrieve a paginated list of all submitted batches in the system, sorted by creation date."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Batch by UUID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/batches/{{batch_uuid}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches",
+								"{{batch_uuid}}"
+							]
+						},
+						"description": "Monitor the real-time progress, file-level statuses, and download URLs of the compressed files for the active batch. It uses the {{batch_uuid}} collection variable populated automatically by the Create Batch request."
+					},
+					"response": []
+				}
+			],
+			"description": "Core functional workflow demonstrating successful batch creations, listings, and progress retrievals."
+		},
+		{
+			"name": "Error Cases",
+			"item": [
+				{
+					"name": "Empty URL List",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"urls\": []\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/batches",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches"
+							]
+						},
+						"description": "Submit an empty URL array. Expects HTTP 422 Unprocessable Entity."
+					},
+					"response": []
+				},
+				{
+					"name": "More Than Five URLs",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"urls\": [\n        \"https://example.com/1\",\n        \"https://example.com/2\",\n        \"https://example.com/3\",\n        \"https://example.com/4\",\n        \"https://example.com/5\",\n        \"https://example.com/6\"\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/batches",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches"
+							]
+						},
+						"description": "Submit a payload containing six URLs (limit is 5). Expects HTTP 422 Unprocessable Entity."
+					},
+					"response": []
+				},
+				{
+					"name": "Invalid URL Format",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"urls\": [\n        \"not-a-valid-url\"\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/batches",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches"
+							]
+						},
+						"description": "Submit an malformed URL string. Expects HTTP 422 Unprocessable Entity."
+					},
+					"response": []
+				},
+				{
+					"name": "HTTP Instead of HTTPS",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"urls\": [\n        \"http://raw.githubusercontent.com/laravel/laravel/12.x/README.md\"\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/batches",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches"
+							]
+						},
+						"description": "Submit an insecure HTTP URL. Expects HTTP 422 Unprocessable Entity."
+					},
+					"response": []
+				},
+				{
+					"name": "Unsupported MIME Type",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const responseData = pm.response.json();",
+									"if (responseData && responseData.data && responseData.data.uuid) {",
+									"    pm.collectionVariables.set(\"batch_uuid\", responseData.data.uuid);",
+									"    console.log(\"Stored batch_uuid for error case: \" + responseData.data.uuid);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"urls\": [\n        \"https://httpbin.org/image/png\"\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/batches",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"batches"
+							]
+						},
+						"description": "Submit an image file URL. The request accepts it initially and returns 202 Accepted. However, inside the background queue worker, the mime validation fails. Querying the batch status will show FileStatus = Failed and BatchStatus = Failed."
+					},
+					"response": []
+				}
+			],
+			"description": "Requests demonstrating request-level validation failures (422) and asynchronous worker failures (MIME type exceptions)."
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "batch_uuid",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

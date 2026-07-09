@@ -6,6 +6,25 @@ All API endpoints are prefixed with `/api`.
 
 ---
 
+## Interactive Postman Execution Guide
+
+For a guided, automated review of the API, use the preconfigured Postman collection:
+- **File Path**: [docs/postman/Batch_File_Compression_Service_API.postman_collection.json](file:///Volumes/Macintosh%20HD%20-%20Data/2026/github/laravel_time_test/docs/postman/Batch_File_Compression_Service_API.postman_collection.json)
+
+### Importing the Collection
+1. Click **Import** in Postman.
+2. Choose the JSON file from the path above.
+3. The collection defines two variables:
+   - `base_url`: Default value is `http://localhost:8000`. Modify this if your Docker environment runs on a different port.
+   - `batch_uuid`: Initially blank. It is automatically filled by the Test script.
+
+### Recommended Execution Flow
+1. **Create Batch** (in the `Happy Path` folder): Submits three public stable sample files. On success (HTTP 202 Accepted), the Test script captures `data.uuid` from the response and stores it in the `batch_uuid` collection variable.
+2. **List Batches**: Returns a list of all batches (HTTP 200 OK) to confirm the new batch has been queued.
+3. **Get Batch by UUID**: Retrieves processing details using `{{batch_uuid}}` (HTTP 200 OK). Repeated requests will track transition progress (`downloading` -> `compressing` -> `completed`) and provide local download links once finished.
+
+---
+
 ## Endpoints Summary
 
 | Method | Route | Description |

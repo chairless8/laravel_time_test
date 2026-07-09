@@ -52,6 +52,24 @@ The REST API will be available at:
 
 ---
 
+## Interactive Testing with Postman
+
+An interactive, preconfigured Postman collection is provided to demonstrate the full application workflow:
+- **Location**: [docs/postman/Batch_File_Compression_Service_API.postman_collection.json](file:///Volumes/Macintosh%20HD%20-%20Data/2026/github/laravel_time_test/docs/postman/Batch_File_Compression_Service_API.postman_collection.json)
+- **Import Instructions**:
+  1. Open Postman.
+  2. Click **Import** and drag-and-drop the JSON collection file.
+  3. Ensure your local Docker stack is running (`docker compose up -d`).
+- **Happy Path Workflow**:
+  1. Run **Create Batch** under the `Happy Path` folder.
+  2. The Test script automatically extracts the created `data.uuid` and saves it to the `{{batch_uuid}}` collection variable.
+  3. Run **List Batches** to inspect all batches in the system.
+  4. Run **Get Batch by UUID** to view progress (e.g., `downloading` -> `compressing` -> `completed`) and download links.
+- **Error Cases**:
+  - The `Error Cases` folder demonstrates input-level validation rejections (HTTP 422 for non-HTTPS, >5 URLs, empty parameters) and asynchronous processing failures (HTTP 202 followed by background worker exceptions for unsupported MIME types).
+
+---
+
 ## Running Automated Tests
 
 Run the full PHPUnit test suite inside the application container:
