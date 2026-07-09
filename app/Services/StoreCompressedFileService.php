@@ -37,7 +37,7 @@ class StoreCompressedFileService
         }
 
         try {
-            $stored = Storage::disk('local')->put($storagePath, $stream);
+            $stored = Storage::put($storagePath, $stream);
             if (is_resource($stream)) {
                 fclose($stream);
             }
@@ -70,7 +70,7 @@ class StoreCompressedFileService
             if (is_resource($stream)) {
                 fclose($stream);
             }
-            Storage::disk('local')->delete($storagePath);
+            Storage::delete($storagePath);
             throw new \Exception("Storage persistence error: " . $e->getMessage(), 0, $e);
         }
     }

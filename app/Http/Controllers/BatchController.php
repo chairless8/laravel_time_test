@@ -15,7 +15,7 @@ class BatchController extends Controller
      */
     public function index(): BatchCollection
     {
-        $batches = Batch::with('batchFiles')->latest()->get();
+        $batches = Batch::with('batchFiles.file')->latest()->get();
         return new BatchCollection($batches);
     }
 
@@ -26,7 +26,7 @@ class BatchController extends Controller
     {
         $batch = $service->execute($request->validated('urls'));
         
-        $batch->load('batchFiles');
+        $batch->load('batchFiles.file');
 
         return (new BatchResource($batch))
             ->response()
@@ -38,7 +38,7 @@ class BatchController extends Controller
      */
     public function show(Batch $batch): BatchResource
     {
-        $batch->loadMissing('batchFiles');
+        $batch->loadMissing('batchFiles.file');
         return new BatchResource($batch);
     }
 }

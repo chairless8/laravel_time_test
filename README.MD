@@ -46,6 +46,7 @@ Ensure local storage is symlinked to the public directory:
 ```bash
 docker compose exec compression-app php artisan storage:link
 ```
+The project stores compressed files using Laravel's public filesystem. Running this command creates the symbolic link that exposes those files under `/storage/compressions/{file}.zip`.
 
 The REST API will be available at:
 `http://localhost:8000/api/batches`
@@ -64,7 +65,7 @@ An interactive, preconfigured Postman collection is provided to demonstrate the 
   1. Run **Create Batch** under the `Happy Path` folder.
   2. The Test script automatically extracts the created `data.uuid` and saves it to the `{{batch_uuid}}` collection variable.
   3. Run **List Batches** to inspect all batches in the system.
-  4. Run **Get Batch by UUID** to view progress (e.g., `downloading` -> `compressing` -> `completed`) and download links.
+  4. Run **Get Batch by UUID** to view progress (e.g., `downloading` -> `compressing` -> `completed`). Once completed, each file will expose a direct `file.download_url` serving the compressed ZIP publicly through Laravel's symlink setup (`php artisan storage:link`).
 - **Error Cases**:
   - The `Error Cases` folder demonstrates input-level validation rejections (HTTP 422 for non-HTTPS, >5 URLs, empty parameters) and asynchronous processing failures (HTTP 202 followed by background worker exceptions for unsupported MIME types).
 

@@ -128,6 +128,17 @@ class ProcessBatchService implements ProcessBatchServiceInterface
                         throw new \Exception("Could not determine file content type.");
                     }
 
+                    // Coerce mime type for markdown/text files starting with HTML tags
+                    $urlPath = parse_url($batchFile->original_url, PHP_URL_PATH);
+                    $extension = strtolower(pathinfo($urlPath, PATHINFO_EXTENSION));
+                    if (($mimeType === 'text/html' || $mimeType === 'text/plain') && in_array($extension, ['md', 'txt', 'csv'])) {
+                        if ($extension === 'csv') {
+                            $mimeType = 'text/csv';
+                        } else {
+                            $mimeType = 'text/plain';
+                        }
+                    }
+
                     if (!in_array($mimeType, config('compression.allowed_mime_types'))) {
                         throw new \Exception("Unsupported content type: {$mimeType}.");
                     }

@@ -21,7 +21,7 @@ class FileProcessingTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Storage::fake('local');
+        Storage::fake();
     }
 
     /**
@@ -74,10 +74,10 @@ class FileProcessingTest extends TestCase
         $this->assertEquals(hash('sha256', 'Valid text content'), $fileModel->checksum);
 
         // Assert ZIP file exists in Laravel Storage
-        Storage::disk('local')->assertExists($fileModel->storage_path);
+        Storage::assertExists($fileModel->storage_path);
         
         // Assert ZIP content is valid and contains our file
-        $fullPath = Storage::disk('local')->path($fileModel->storage_path);
+        $fullPath = Storage::path($fileModel->storage_path);
         $zip = new \ZipArchive();
         $this->assertTrue($zip->open($fullPath));
         $this->assertEquals('valid.txt', $zip->getNameIndex(0));

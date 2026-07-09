@@ -77,7 +77,7 @@ The application follows a Service-Oriented Architecture (SOA) that separates HTT
 The queue job delegates execution to `ProcessBatchService`, which acts as an orchestrator and delegates tasks to specific helper services:
 - **`DownloadFileService`**: Streams the remote file to a local temporary file using Laravel HTTP Client. Enforces request timeouts.
 - **`CompressFileService`**: Compresses the downloaded file into a ZIP archive using PHP's native `ZipArchive` in a temporary path.
-- **`StoreCompressedFileService`**: Copies the ZIP stream to local storage (`Storage::disk('local')`), creates the `File` metadata record, and associates it with the `BatchFile` record.
+- **`StoreCompressedFileService`**: Copies the ZIP stream to public storage (`Storage::disk('public')`), creates the `File` metadata record, and associates it with the `BatchFile` record.
 - **`ProcessBatchService` (Orchestrator)**: Manages lock acquisition, idempotency checks, loops through files, validates size/MIME type after download, calculates batch progress percentages, captures failures, unlinks temp files, updates status fields, and dispatches domain events.
 
 ---
@@ -138,7 +138,19 @@ To prevent multiple background workers from processing the same batch concurrent
 
 ## Storage Strategy
 
-- **Local Storage**: Files are saved to local disks using Laravel's file abstraction `Storage::disk('local')`. Path is `compressions/{original_name}_{uniqid}.zip`.
+- **Local Storage**: Files are saved using Laravel's default storage filesystem (configured as `public` in `.env`), making the implementation driver-agnostic. Path is `compressions/{original_name}_{uniqid}.zip`.
+- **File Journey Diagram**:
+  ```
+  Download remote file
+         │
+  Compress to ZIP
+         │
+  Store on Default Public Disk (Storage::put) ──> maps to storage/app/public/compressions/
+         │
+  Resolve Public Link via storage link symlink ──> maps to public/storage/compressions/
+         │
+  Generate URL (Storage::url) ──> http://localhost:8000/storage/compressions/{file}.zip
+  ```
 - **Database Metadata**: We track details in the `files` table:
   - `original_filename` & `compressed_filename`
   - `mime_type` (e.g. `text/plain`, `text/csv`, `application/pdf`)

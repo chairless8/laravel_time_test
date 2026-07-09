@@ -16,9 +16,9 @@ This document summarizes key architectural choices and engineering trade-offs ma
 
 ## 2. Local Filesystem Storage vs. S3 Cloud Storage
 
-- **Decision**: Stored compressed files locally inside `storage/app/compressions/` using `Storage::disk('local')`.
+- **Decision**: Stored compressed files using Laravel's default storage driver, with `FILESYSTEM_DISK=public` configured in the environment.
 - **Rationale**: 
-  - **Self-contained**: Running and testing the application requires no AWS credentials, network configuration, or MinIO setups.
+  - **Reviewer Accessibility**: Public Storage was intentionally selected for this assignment to simplify manual verification and demonstrate the complete workflow. In a production environment, the same abstraction could be backed by Amazon S3, MinIO, or another filesystem without changing the application logic.
   - **Zero Cost**: Testing uploads is instant and costs nothing.
   - **Portability**: Laravel's file storage disk abstraction makes it easy to switch to Amazon S3 or Google Cloud Storage in the future by updating config files without changing application code.
 - **Trade-off**: Local disk files do not scale across multiple web nodes in a load-balanced production cluster.

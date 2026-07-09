@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "7f81a704-586b-4e1b-b788-b4b10543e49e",
 		"name": "Batch File Compression Service API",
-		"description": "This collection demonstrates the complete asynchronous workflow of the Batch File Compression Service, including batch creation, status tracking, and retrieval of processed files. It is preconfigured with public sample files and automatically stores the generated Batch UUID for subsequent requests.",
+		"description": "This collection demonstrates the complete asynchronous workflow of the Batch File Compression Service, including batch creation, status tracking, and retrieval of processed files. It is preconfigured with public sample files and automatically stores the generated Batch UUID for subsequent requests. Once a batch is fully processed, the Get Batch by UUID response will return the nested 'file' metadata containing the direct 'download_url' for each successfully compressed ZIP.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -56,7 +56,49 @@
 						},
 						"description": "Submit a new batch of public, stable HTTPS URLs to be compressed. The UUID of the created batch is automatically captured from response.data.uuid and stored in the collection variable {{batch_uuid}}."
 					},
-					"response": []
+					"response": [
+						{
+							"name": "Create Batch - Success Response (202 Accepted)",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"urls\": [\n        \"https://raw.githubusercontent.com/laravel/laravel/12.x/README.md\",\n        \"https://raw.githubusercontent.com/vmg/redcarpet/master/README.md\",\n        \"https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf\"\n    ]\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/batches",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"batches"
+									]
+								}
+							},
+							"status": "Accepted",
+							"code": 202,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"data\": {\n        \"uuid\": \"e454b5df-1e80-4df2-ac24-ca84742cb5f6\",\n        \"status\": \"pending\",\n        \"progress\": 0,\n        \"files\": [\n            {\n                \"original_url\": \"https://raw.githubusercontent.com/laravel/laravel/12.x/README.md\",\n                \"status\": \"pending\",\n                \"error_message\": null,\n                \"started_at\": null,\n                \"finished_at\": null,\n                \"file\": null\n            },\n            {\n                \"original_url\": \"https://raw.githubusercontent.com/vmg/redcarpet/master/README.md\",\n                \"status\": \"pending\",\n                \"error_message\": null,\n                \"started_at\": null,\n                \"finished_at\": null,\n                \"file\": null\n            },\n            {\n                \"original_url\": \"https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf\",\n                \"status\": \"pending\",\n                \"error_message\": null,\n                \"started_at\": null,\n                \"finished_at\": null,\n                \"file\": null\n            }\n        ],\n        \"created_at\": \"2026-07-09T18:00:00Z\",\n        \"updated_at\": \"2026-07-09T18:00:00Z\",\n        \"finished_at\": null\n    }\n}"
+						}
+					]
 				},
 				{
 					"name": "List Batches",
@@ -81,7 +123,41 @@
 						},
 						"description": "Retrieve a paginated list of all submitted batches in the system, sorted by creation date."
 					},
-					"response": []
+					"response": [
+						{
+							"name": "List Batches - Success Response (200 OK)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/batches",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"batches"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"data\": [\n        {\n            \"uuid\": \"e454b5df-1e80-4df2-ac24-ca84742cb5f6\",\n            \"status\": \"completed\",\n            \"progress\": 100,\n            \"created_at\": \"2026-07-09T18:00:00Z\",\n            \"updated_at\": \"2026-07-09T18:00:05Z\",\n            \"finished_at\": \"2026-07-09T18:00:05Z\"\n        }\n    ],\n    \"links\": {\n        \"first\": \"http://localhost:8000/api/batches?page=1\",\n        \"last\": \"http://localhost:8000/api/batches?page=1\",\n        \"prev\": null,\n        \"next\": null\n    },\n    \"meta\": {\n        \"current_page\": 1,\n        \"from\": 1,\n        \"last_page\": 1,\n        \"path\": \"http://localhost:8000/api/batches\",\n        \"per_page\": 15,\n        \"to\": 1,\n        \"total\": 1\n    }\n}"
+						}
+					]
 				},
 				{
 					"name": "Get Batch by UUID",
@@ -105,9 +181,44 @@
 								"{{batch_uuid}}"
 							]
 						},
-						"description": "Monitor the real-time progress, file-level statuses, and download URLs of the compressed files for the active batch. It uses the {{batch_uuid}} collection variable populated automatically by the Create Batch request."
+						"description": "Monitor the real-time progress, file-level statuses, and download URLs of the compressed files for the active batch. It uses the {{batch_uuid}} collection variable populated automatically by the Create Batch request. Once processing completes successfully, each file will contain a direct download_url to retrieve the generated ZIP archive."
 					},
-					"response": []
+					"response": [
+						{
+							"name": "Get Batch - Success Response (200 OK)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/batches/{{batch_uuid}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"batches",
+										"{{batch_uuid}}"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"data\": {\n        \"uuid\": \"e454b5df-1e80-4df2-ac24-ca84742cb5f6\",\n        \"status\": \"completed\",\n        \"progress\": 100,\n        \"files\": [\n            {\n                \"original_url\": \"https://raw.githubusercontent.com/laravel/laravel/12.x/README.md\",\n                \"status\": \"completed\",\n                \"error_message\": null,\n                \"started_at\": \"2026-07-09T18:00:01Z\",\n                \"finished_at\": \"2026-07-09T18:00:02Z\",\n                \"file\": {\n                    \"original_filename\": \"README.md\",\n                    \"compressed_filename\": \"README_6689dca3f231e.zip\",\n                    \"mime_type\": \"text/plain\",\n                    \"original_size\": 1480,\n                    \"compressed_size\": 750,\n                    \"checksum\": \"8f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86\",\n                    \"download_url\": \"http://localhost:8000/storage/compressions/README_6689dca3f231e.zip\"\n                }\n            },\n            {\n                \"original_url\": \"https://raw.githubusercontent.com/vmg/redcarpet/master/README.md\",\n                \"status\": \"completed\",\n                \"error_message\": null,\n                \"started_at\": \"2026-07-09T18:00:02Z\",\n                \"finished_at\": \"2026-07-09T18:00:03Z\",\n                \"file\": {\n                    \"original_filename\": \"README.md\",\n                    \"compressed_filename\": \"README_6689dca40023f.zip\",\n                    \"mime_type\": \"text/plain\",\n                    \"original_size\": 8450,\n                    \"compressed_size\": 3200,\n                    \"checksum\": \"a8f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f8\",\n                    \"download_url\": \"http://localhost:8000/storage/compressions/README_6689dca40023f.zip\"\n                }\n            },\n            {\n                \"original_url\": \"https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf\",\n                \"status\": \"completed\",\n                \"error_message\": null,\n                \"started_at\": \"2026-07-09T18:00:03Z\",\n                \"finished_at\": \"2026-07-09T18:00:04Z\",\n                \"file\": {\n                    \"original_filename\": \"dummy.pdf\",\n                    \"compressed_filename\": \"dummy_6689dca41a31d.zip\",\n                    \"mime_type\": \"application/pdf\",\n                    \"original_size\": 23000,\n                    \"compressed_size\": 19500,\n                    \"checksum\": \"b8f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f8\",\n                    \"download_url\": \"http://localhost:8000/storage/compressions/dummy_6689dca41a31d.zip\"\n                }\n            }\n        ],\n        \"created_at\": \"2026-07-09T18:00:00Z\",\n        \"updated_at\": \"2026-07-09T18:00:05Z\",\n        \"finished_at\": \"2026-07-09T18:00:05Z\"\n    }\n}"
+						}
+					]
 				}
 			],
 			"description": "Core functional workflow demonstrating successful batch creations, listings, and progress retrievals."

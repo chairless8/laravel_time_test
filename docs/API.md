@@ -21,7 +21,10 @@ For a guided, automated review of the API, use the preconfigured Postman collect
 ### Recommended Execution Flow
 1. **Create Batch** (in the `Happy Path` folder): Submits three public stable sample files. On success (HTTP 202 Accepted), the Test script captures `data.uuid` from the response and stores it in the `batch_uuid` collection variable.
 2. **List Batches**: Returns a list of all batches (HTTP 200 OK) to confirm the new batch has been queued.
-3. **Get Batch by UUID**: Retrieves processing details using `{{batch_uuid}}` (HTTP 200 OK). Repeated requests will track transition progress (`downloading` -> `compressing` -> `completed`) and provide local download links once finished.
+3. **Get Batch by UUID**: Retrieves processing details using `{{batch_uuid}}` (HTTP 200 OK). Repeated requests track transition progress. Once completed successfully, the response exposes a nested `file.download_url` attribute (e.g. `http://localhost:8000/storage/compressions/...`).
+
+### File Storage Access
+Compressed files are stored using Laravel's public filesystem (default disk `FILESYSTEM_DISK=public` is configured in the environment). This writes ZIP archives to `storage/app/public/compressions/`. Reviewers can download them directly through HTTP at `/storage/compressions/{file}.zip` using the symbolic link setup (`php artisan storage:link`).
 
 ---
 
@@ -68,31 +71,32 @@ Creates a new compression batch and queues background processing for the provide
 The batch was validated and queued for background processing.
 ```json
 {
-  "id": "e454b5df-1e80-4df2-ac24-ca84742cb5f6",
-  "status": "pending",
-  "progress": 0,
-  "created_at": "2026-07-09T18:00:00Z",
-  "finished_at": null,
-  "files": [
-    {
-      "id": 1,
-      "original_url": "https://raw.githubusercontent.com/laravel/laravel/11.x/README.md",
-      "status": "pending",
-      "error_message": null,
-      "started_at": null,
-      "finished_at": null,
-      "file": null
-    },
-    {
-      "id": 2,
-      "original_url": "https://example.com/sample-document.pdf",
-      "status": "pending",
-      "error_message": null,
-      "started_at": null,
-      "finished_at": null,
-      "file": null
-    }
-  ]
+  "data": {
+    "uuid": "e454b5df-1e80-4df2-ac24-ca84742cb5f6",
+    "status": "pending",
+    "progress": 0,
+    "files": [
+      {
+        "original_url": "https://raw.githubusercontent.com/laravel/laravel/11.x/README.md",
+        "status": "pending",
+        "error_message": null,
+        "started_at": null,
+        "finished_at": null,
+        "file": null
+      },
+      {
+        "original_url": "https://example.com/sample-document.pdf",
+        "status": "pending",
+        "error_message": null,
+        "started_at": null,
+        "finished_at": null,
+        "file": null
+      }
+    ],
+    "created_at": "2026-07-09T18:00:00Z",
+    "updated_at": "2026-07-09T18:00:00Z",
+    "finished_at": null
+  }
 }
 ```
 
@@ -166,31 +170,32 @@ Gets the current progress, status, and processing logs for a specific batch by U
 ##### HTTP 200 OK (Success)
 ```json
 {
-  "id": "e454b5df-1e80-4df2-ac24-ca84742cb5f6",
-  "status": "completed",
-  "progress": 100,
-  "created_at": "2026-07-09T18:00:00Z",
-  "finished_at": "2026-07-09T18:00:05Z",
-  "files": [
-    {
-      "id": 1,
-      "original_url": "https://raw.githubusercontent.com/laravel/laravel/11.x/README.md",
-      "status": "completed",
-      "error_message": null,
-      "started_at": "2026-07-09T18:00:02Z",
-      "finished_at": "2026-07-09T18:00:04Z",
-      "file": {
-        "original_filename": "README.md",
-        "compressed_filename": "README_6689dca3f231e.zip",
-        "mime_type": "text/plain",
-        "original_size": 1480,
-        "compressed_size": 750,
-        "storage_path": "compressions/README_6689dca3f231e.zip",
-        "checksum": "8f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86",
-        "download_url": "http://localhost:8000/storage/compressions/README_6689dca3f231e.zip"
+  "data": {
+    "uuid": "e454b5df-1e80-4df2-ac24-ca84742cb5f6",
+    "status": "completed",
+    "progress": 100,
+    "files": [
+      {
+        "original_url": "https://raw.githubusercontent.com/laravel/laravel/11.x/README.md",
+        "status": "completed",
+        "error_message": null,
+        "started_at": "2026-07-09T18:00:02Z",
+        "finished_at": "2026-07-09T18:00:04Z",
+        "file": {
+          "original_filename": "README.md",
+          "compressed_filename": "README_6689dca3f231e.zip",
+          "mime_type": "text/plain",
+          "original_size": 1480,
+          "compressed_size": 750,
+          "checksum": "8f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86f78f86",
+          "download_url": "http://localhost:8000/storage/compressions/README_6689dca3f231e.zip"
+        }
       }
-    }
-  ]
+    ],
+    "created_at": "2026-07-09T18:00:00Z",
+    "updated_at": "2026-07-09T18:00:05Z",
+    "finished_at": "2026-07-09T18:00:05Z"
+  }
 }
 ```
 

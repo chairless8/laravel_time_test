@@ -22,7 +22,7 @@ class OperationalResilienceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        Storage::fake('local');
+        Storage::fake();
     }
 
     /**

@@ -42,6 +42,7 @@ class BatchApiTest extends TestCase
                         'error_message',
                         'started_at',
                         'finished_at',
+                        'file',
                     ]
                 ],
                 'created_at',
@@ -202,5 +203,37 @@ class BatchApiTest extends TestCase
         ]);
         
         $response->assertJsonCount(2, 'data');
+    }
+
+    public function test_successful_processed_batch_exposes_download_url(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake();
+
+        $batch = Batch::create([
+            'status' => \App\Enums\BatchStatus::Completed,
+            'progress' => 100,
+        ]);
+
+        $fileModel = \App\Models\File::create([
+            'original_filename' => 'test.txt',
+            'compressed_filename' => 'test_compressed.zip',
+            'mime_type' => 'text/plain',
+            'original_size' => 100,
+            'compressed_size' => 50,
+            'storage_path' => 'compressions/test_compressed.zip',
+            'checksum' => 'fake-checksum',
+        ]);
+
+        $batch->batchFiles()->create([
+            'original_url' => 'https://example.com/test.txt',
+            'status' => \App\Enums\FileStatus::Completed,
+            'file_id' => $fileModel->id,
+        ]);
+
+        $response = $this->getJson("/api/batches/{$batch->uuid}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.files.0.file.original_filename', 'test.txt')
+            ->assertJsonPath('data.files.0.file.download_url', \Illuminate\Support\Facades\Storage::url('compressions/test_compressed.zip'));
     }
 }
